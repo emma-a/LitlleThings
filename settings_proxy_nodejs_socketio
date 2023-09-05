@@ -1,0 +1,69 @@
+Socket IO/Proxy/SSL/NodeJs/Apache2
+
+When you're struggling with Proxy and Apache2 and Nodejs and Socket.IO because of your lousy memory, here are some tips for you dear Emma
+----------------------------------------------------------------------------------------------------------------------
+1. Virtual host: please do yourself a solid, go get some coffee and please add 2 different ports for SSL and non SSL
+----------------
+
+Port 443: ( your SSL nodejs service should work on 3001 port for this example )
+  
+  <Proxy *>
+		Order deny,allow
+		Allow from all
+	</Proxy>
+
+	ProxyRequests Off
+	ProxyPreserveHost On
+	SSLProxyEngine On
+	RequestHeader set Front-End-Https "On"
+
+	ProxyPass /sockets  https://domain.fr:3001
+	ProxyPass /socket.io https://domain.fr:3001/socket.io
+	RewriteEngine on
+  RewriteCond %{HTTP:Upgrade} websocket [NC]
+  RewriteRule ^/?(.*) "wss://domain.fr:3001/$1" [P,L]
+
+Port 80: (nodejs will work on 3000 for this one)
+
+  ProxyRequests Off
+	ProxyPreserveHost On
+	SSLProxyEngine On
+	RequestHeader set Front-End-Https "On"
+
+	ProxyPass /sockets  http://infobesancon.fr:3000
+	ProxyPass /socket.io http://infobesancon.fr:3000/socket.io
+	RewriteEngine on
+  RewriteCond %{HTTP:Upgrade} websocket [NC]
+  RewriteRule ^/?(.*) "ws://infobesancon.fr:3000/$1" [P,L]
+
+-----------------------------------------------
+2. NodeJS Server side : (tip for you visitor: change domain.fr with your own domain .... )
+------------------
+
+const https     = require('https');
+const http      = require('http');
+const io        = require('socket.io');
+// Load SSL/TLS certificates
+const privateKey    = fs.readFileSync('../ssl/domain.key', 'utf8');
+const certificate   = fs.readFileSync('../ssl/domain.crt', 'utf8');
+const credentials   = { key: privateKey, cert: certificate };
+options={
+    cors    :true,
+    origins :["https://domain.fr:3001","wss://domain.fr:3001", "http://domain.fr:3000","ws://domain.fr:3000","https://domain.fr","http://domain.fr"]
+}
+
+// Create an HTTPS/HTTP server
+const sslserver        = https.createServer(credentials);
+const server           = http.createServer();
+// Create a Socket.IO server
+const socket        = io(server, options);
+const socketSSL     = io(sslserver, options);
+
+-------------------------------------------------
+3. Client Side
+-----------
+
+<script src="/socket.io/socket.io.js"></script>
+<script>socket = io();</script>
+
+And that's it ;)
